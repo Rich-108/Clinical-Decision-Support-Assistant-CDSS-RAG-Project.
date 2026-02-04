@@ -17,7 +17,9 @@ app = FastAPI(
 )
 
 # Load persisted FAISS index + documents on startup
+print("🔍 Loading index...")
 index, documents = load_index()
+print("🔍 Index loaded result:", "Success" if index is not None else "None")
 if index is not None:
     state.faiss_index = index
     state.documents = documents
@@ -25,10 +27,14 @@ if index is not None:
 else:
     print("⚠️ No saved clinical guidelines found")
 
+print("🔍 Registering routers...")
 # Register routers
 app.include_router(guidelines_router)
+print("🔍 Guidelines router registered")
 app.include_router(search_router)
+print("🔍 Search router registered")
 app.include_router(cdss_router)
+print("🔍 CDSS router registered")
 
 
 @app.get("/health")

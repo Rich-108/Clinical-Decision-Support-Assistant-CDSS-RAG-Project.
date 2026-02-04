@@ -1,67 +1,34 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from pathlib import Path
 
-from app.services.pdf_loader import extract_text_from_pdf
-from app.services.chunker import chunk_text
-from app.services.embeddings import create_embeddings
-from app.services.vector_store import build_faiss_index
-from app.services.persistence import save_index
-from app.services import state
+router = APIRouter(prefix="/guidelines", tags=["Guidelines"])
 
-router = APIRouter(
-    prefix="/guidelines",
-    tags=["Clinical Guidelines"]
-)
-
-# Folder to store uploaded PDFs
+# Directory to store uploaded PDFs
 DATA_DIR = Path("data/guidelines")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
+from app.services import state
+from app.services.vector_service import create_index_from_pdf
+
 @router.post("/upload")
 async def upload_guideline(file: UploadFile = File(...)):
-    """
-    Upload a clinical guideline PDF.
-    Supports MULTIPLE PDFs.
-    Persists FAISS index + document metadata.
-    """
-
-    # 1️⃣ Save PDF to disk
+    # ... your existing save-to-disk code ...
     file_path = DATA_DIR / file.filename
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+    
+    try:
+        # Save file
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
 
-    # 2️⃣ Extract text from PDF
-    extracted_text = extract_text_from_pdf(file_path)
+        # TRIGGER THE INDEXING (The missing step!)
+        index, docs = create_index_from_pdf(file_path)
+        
+        # Update Global State
+        state.faiss_index = index
+        state.documents = docs
 
-    # 3️⃣ Chunk text (medical-safe)
-    chunks = chunk_text(extracted_text)
-
-    # 4️⃣ Convert chunks → document records (text + source)
-    new_documents = []
-    for chunk in chunks:
-        new_documents.append({
-            "text": chunk,
-            "source": file.filename
-        })
-
-    # 5️⃣ Append to GLOBAL state (multi-PDF support)
-    state.documents.extend(new_documents)
-
-    # 6️⃣ Rebuild embeddings for ALL documents
-    all_texts = [doc["text"] for doc in state.documents]
-    embeddings = create_embeddings(all_texts)
-
-    # 7️⃣ Build FAISS index
-    index = build_faiss_index(embeddings)
-    state.faiss_index = index
-
-    # 8️⃣ Persist index + metadata to disk
-    save_index(index, state.documents)
-
-    # 9️⃣ Return clear response
-    return {
-        "uploaded_file": file.filename,
-        "total_documents": len(state.documents),
-        "total_vectors": index.ntotal
-    }
+        return {"message": "PDF uploaded and indexed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
