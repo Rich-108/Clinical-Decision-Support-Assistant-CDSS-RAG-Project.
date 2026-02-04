@@ -1,7 +1,14 @@
-import requests
+import os
+from langchain_groq import ChatGroq
 
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-MODEL_NAME = "llama3.2:1b"  # 🚀 Use the 1B model you already have
+# Get API key from environment variable (best for hosting)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+llm = ChatGroq(
+    groq_api_key=GROQ_API_KEY,
+    model_name="llama-3.1-8b-instant", # This is way faster than llama3.2:1b!
+    temperature=0.1
+)
 
 def generate_answer(question: str, evidence: list) -> str:
     if not evidence:
